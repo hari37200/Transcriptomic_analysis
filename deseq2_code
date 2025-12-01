@@ -1,0 +1,115 @@
+# ==========================================================
+# Differential Gene Expression: TNT vs TNTCN
+# ==========================================================
+
+library(DESeq2)
+library(tidyverse)
+library(pheatmap)
+
+setwd("E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin")
+
+output_dir <- "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/datanew_dupsig/TNTvsTNTCN"
+if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+# ----------------------------------------------------------
+# Targets list (same as all other scripts)
+# ----------------------------------------------------------
+targets <- data.frame(
+  files = c(
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/NH4Cl_Succ1_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/NH4Cl_Succ2_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/NH4Cl_Succ3_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_NH4Cl1_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_NH4Cl2_nohuman_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_NH4Cl3_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_NH4ClS1_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_NH4ClS2_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_NH4ClS3_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_Succ1_nohuman_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_Succ2_nohuman_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT_Succ3_nohuman_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT1_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT2_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/TNT3_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/L3NT1_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/L3NT2_CDS_featureCounts.txt",
+    "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin/L3NT3_CDS_featureCounts.txt"
+  ),
+  group = factor(c(
+    rep("CN",3),
+    rep("TNTCN",3),
+    rep("TNTC",3),
+    rep("TNTN",3),
+    rep("TNT",3),
+    rep("L3NT",3)
+  ))
+)
+
+# ----------------------------------------------------------
+# Load FeatureCounts tables
+# ----------------------------------------------------------
+count_list <- lapply(as.character(targets$files), function(f) {
+  dat <- read.delim(f, header = FALSE, comment.char = "#")
+  colnames(dat) <- c("Geneid","Chr","Start","End","Strand","Length","Counts")
+  dat <- dat[, c("Geneid","Counts")]
+  colnames(dat)[2] <- basename(f)
+  dat
+})
+
+countData <- Reduce(function(x,y) merge(x,y,by="Geneid",all=TRUE), count_list)
+
+rownames(countData) <- countData$Geneid
+countData <- countData[, -1]
+
+countData[] <- lapply(countData, function(x) suppressWarnings(as.numeric(as.character(x))))
+countData[is.na(countData)] <- 0
+countData <- countData[rowSums(countData) > 0, ]
+
+# ----------------------------------------------------------
+# DESeq2 object
+# ----------------------------------------------------------
+dds <- DESeqDataSetFromMatrix(
+  countData = round(as.matrix(countData)),
+  colData = targets,
+  design = ~ group
+)
+
+# Keep TNT and TNTCN only
+dds <- dds[, dds$group %in% c("TNT","TNTCN")]
+dds$group <- droplevels(dds$group)
+
+# Set reference = TNTCN
+dds$group <- relevel(dds$group, ref = "TNTCN")
+
+dds <- DESeq(dds)
+
+# ----------------------------------------------------------
+# Get results
+# ----------------------------------------------------------
+res <- results(dds, contrast = c("group", "TNT", "TNTCN"))
+res <- lfcShrink(dds, contrast=c("group","TNT","TNTCN"), res=res, type="ashr")
+res <- res[order(res$padj), ]
+
+# Save complete results
+write.csv(as.data.frame(res),
+          file=file.path(output_dir,"DESeq2_TNT_vs_TNTCN_all.csv"))
+
+# ----------------------------------------------------------
+# Significant genes
+# ----------------------------------------------------------
+sig <- subset(res, padj < 0.05 & abs(log2FoldChange) > 0)
+
+write.csv(sig,
+          file=file.path(output_dir,"DESeq2_TNT_vs_TNTCN_sig.csv"))
+
+# ----------------------------------------------------------
+# Standard Deviation for significant genes
+# ----------------------------------------------------------
+norm <- counts(dds, normalized = TRUE)
+sig_norm <- norm[rownames(sig), ]
+sd_vec <- apply(sig_norm, 1, sd)
+
+write.csv(
+  data.frame(Geneid = rownames(sig), SD = sd_vec),
+  file = file.path(output_dir,"SD_TNT_vs_TNTCN_sig.csv")
+)
