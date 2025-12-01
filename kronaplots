@@ -1,0 +1,4 @@
+ktImportTaxonomy -t 5 -m 3 \
+  -o "/mnt/e/RNA QC DS2/krona plots/L3NT1_krona.html" \
+  "/mnt/e/RNA QC DS2/kraken2_results/L3NT1.report"
+
