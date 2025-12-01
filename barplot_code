@@ -1,0 +1,78 @@
+# Load libraries
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+
+# Input Excel files
+files <- list(
+  TNTC_vs_L3NT  = "E:/RNA_QC_DS2/ANALYSIS/lfcse/DESeq2_TNTC_vs_L3NT_significant_log2FC1_formatted.xlsx",
+  TNTCN_vs_L3NT = "E:/RNA_QC_DS2/ANALYSIS/lfcse/DESeq2_TNTCN_vs_L3NT_significant_log2FC1_formatted.xlsx",
+  TNTN_vs_L3NT  = "E:/RNA_QC_DS2/ANALYSIS/lfcse/DESeq2_TNTN_vs_L3NT_significant_log2FC1_formatted.xlsx",
+  TNT_vs_L3NT   = "E:/RNA_QC_DS2/ANALYSIS/lfcse/DESeq2_TNT_vs_L3NT_significant_log2FC1_formatted.xlsx"
+)
+
+# Output directory
+out_dir <- "E:/RNA_QC_DS2/ANALYSIS/lfcse"
+if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+# Loop through each file and plot
+for (comp in names(files)) {
+  
+  # Read Excel file
+  df <- read_xlsx(files[[comp]])
+  colnames(df) <- tolower(colnames(df))
+  
+  # Identify required columns
+  if(!("log2foldchange" %in% colnames(df)) | !("lfcse" %in% colnames(df))) {
+    stop(paste("❌ Missing required columns in", comp))
+  }
+  
+  # Detect gene column (assume first column is gene)
+  gene_col <- colnames(df)[1]
+  df <- df %>%
+    rename(gene = !!sym(gene_col)) %>%
+    mutate(
+      regulation = ifelse(log2foldchange > 0, "Upregulated", "Downregulated"),
+      color = ifelse(regulation == "Upregulated", "green", "red"),
+      `log2FC ± lfcSE` = sprintf("%.2f ± %.2f", log2foldchange, lfcse)
+    )
+  
+  # Sort genes by log2FC for cleaner visualization
+  df <- df %>% arrange(log2foldchange)
+  df$gene <- factor(df$gene, levels = df$gene)
+  
+  # ---- Plot ----
+  p <- ggplot(df, aes(x = gene, y = log2foldchange, fill = color)) +
+    geom_col(color = "black", width = 0.7) +
+    
+    # ✅ Show only the "top" error bar in the correct direction
+    geom_errorbar(
+      aes(
+        ymin = ifelse(log2foldchange > 0, log2foldchange, log2foldchange - lfcse),
+        ymax = ifelse(log2foldchange > 0, log2foldchange + lfcse, log2foldchange)
+      ),
+      width = 0.25, linewidth = 0.5
+    ) +
+    
+    coord_flip() +
+    scale_fill_identity() +
+    geom_hline(yintercept = 0, color = "gray40", linetype = "dashed") +
+    labs(
+      x = NULL,
+      y = expression(Log[2]~Fold~Change),
+      title = paste0(comp, " (", nrow(df), " significant genes)")
+    ) +
+    theme_bw(base_size = 10) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text.y = element_text(size = 6)
+    )
+  
+  # Save plot
+  out_path <- file.path(out_dir, paste0(comp, "_barplot_lfcse_top_corrected.png"))
+  ggsave(out_path, plot = p, width = 8, height = max(6, 0.18 * nrow(df)), dpi = 300)
+  
+  cat("✅ Saved:", out_path, "\n")
+}
