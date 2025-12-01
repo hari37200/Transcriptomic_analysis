@@ -27,7 +27,7 @@ FEATURES=$(awk '$1 !~ /^#/ {print $3}' "$ANNOTATION" | sort | uniq)
 
 for BAM in "$IN_DIR"/*_dedup.bam; do
     SAMPLE=$(basename "$BAM" _dedup.bam)
-    echo "📊 Counting features for $SAMPLE ..."
+    echo "Counting features for $SAMPLE ..."
 
     for FEATURE in $FEATURES; do
         echo "   Counting $FEATURE ..."
@@ -39,5 +39,5 @@ for BAM in "$IN_DIR"/*_dedup.bam; do
           "$BAM"
     done
 
-    echo "✅ Done: $SAMPLE"
+    echo " Done: $SAMPLE"
 done
