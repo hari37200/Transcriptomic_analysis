@@ -1,0 +1,5 @@
+k2 classify --db /scratch/parthsgoel20/k2_db --threads 20 --paired \
+  /scratch/parthsgoel20/fastq/TNT3_R1.trimmed.fq.gz /scratch/parthsgoel20/fastq/TNT3_R2.trimmed.fq.gz \
+  --report /scratch/parthsgoel20/kraken2_results/TNT3.report \
+  --output /scratch/parthsgoel20/kraken2_results/TNT3.kraken \
+  --memory-mapping 
