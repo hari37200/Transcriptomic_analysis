@@ -1,0 +1,43 @@
+bowtie2 -x /mnt/d/research/DS2_rw_index \
+        -1 /mnt/e/RNA_QC_DS2/new_kraken/L3NT2_R1.trimmed.fq.gz \
+        -2 /mnt/e/RNA_QC_DS2/new_kraken/L3NT2_R2.trimmed.fq.gz \
+        -S /mnt/e/RNA_QC_DS2/ANALYSIS/BOWTIE2/L3NT2_aligned.sam
+        
+## WSL-ready Bowtie2-build command:
+bowtie2-build /mnt/d/research/DS2_rw.fna /mnt/d/research/DS2_rw_index
+
+#######FEATURE COUNT###########
+featureCounts -p -O -T 12 -F GFF -t CDS -g ID \
+  -a /mnt/d/research/DS2_rw.gff3 \
+  -o /mnt/e/RNA_QC_DS2/ANALYSIS/FEATURECOUNT/L3NT1_featureCounts_output.txt \
+  /mnt/e/RNA_QC_DS2/ANALYSIS/BOWTIE2/L3NT1_aligned.sam
+#############featurecount loop###########
+
+#!/bin/bash
+
+IN_DIR="/mnt/e/RNA_QC_DS2/ANALYSIS/deduplicate_Sam"
+OUT_DIR="/mnt/e/RNA_QC_DS2/ANALYSIS/FEATURECOUNT"
+ANNOTATION="/mnt/d/research/DS2_rw.gff3"
+THREADS=12
+
+mkdir -p "$OUT_DIR"
+
+# Extract all unique feature types from GFF3
+FEATURES=$(awk '$1 !~ /^#/ {print $3}' "$ANNOTATION" | sort | uniq)
+
+for BAM in "$IN_DIR"/*_dedup.bam; do
+    SAMPLE=$(basename "$BAM" _dedup.bam)
+    echo "📊 Counting features for $SAMPLE ..."
+
+    for FEATURE in $FEATURES; do
+        echo "   Counting $FEATURE ..."
+        featureCounts -p -O -T $THREADS \
+          -a $ANNOTATION -F GFF \
+          -t $FEATURE \
+          -g ID \
+          -o "$OUT_DIR/${SAMPLE}_${FEATURE}_featureCounts.txt" \
+          "$BAM"
+    done
+
+    echo "✅ Done: $SAMPLE"
+done
