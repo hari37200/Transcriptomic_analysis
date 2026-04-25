@@ -2,7 +2,7 @@
 # FINAL PCA PLOT - LABELS + PERFECT AXES
 # ==========================================================
 
-library(ggrepel)  # 👈 Add this if not loaded
+library(ggrepel)  # Add this if not loaded
 
 # 1. VST transform
 vsd <- vst(dds, blind = FALSE)
@@ -11,9 +11,9 @@ vsd <- vst(dds, blind = FALSE)
 pcaData <- plotPCA(vsd, intgroup = "group", returnData = TRUE)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
 
-# 🔍 Ranges
-cat("📊 PC1:", round(range(pcaData$PC1), 2), " | PC2:", round(range(pcaData$PC2), 2), "\n")
-cat("📈 Variance: PC1 =", percentVar[1], "% | PC2 =", percentVar[2], "%\n\n")
+# Ranges
+cat(" PC1:", round(range(pcaData$PC1), 2), " | PC2:", round(range(pcaData$PC2), 2), "\n")
+cat(" Variance: PC1 =", percentVar[1], "% | PC2 =", percentVar[2], "%\n\n")
 
 # 3. FINAL PLOT
 pca_plot <- ggplot(pcaData, aes(PC1, PC2, color = group)) +
@@ -49,22 +49,18 @@ pca_plot <- ggplot(pcaData, aes(PC1, PC2, color = group)) +
     
   ) +
   
-  # 🔥 BOXED CLEAN THEME (no grid, with border)
+  # BOXED CLEAN THEME (no grid, with border)
   theme_bw(base_size = 15) +
   theme(
     legend.position = "top",
     panel.grid = element_blank(),        
-    panel.border = element_rect(color = "black", size = 1),  # ✅
+    panel.border = element_rect(color = "black", size = 1),  # 
     axis.title = element_text(size = 13, face = "bold")
   )
 # 4. Display & save
 print(pca_plot)
 ggsave(file.path(output_dir, "PCA_TNTCN_vs_3NT_final.png"), 
        pca_plot, width = 11, height = 8, dpi = 300, bg = "white")
-
-cat("✅ PCA plot saved: PCA_TNT_vs_TNTN_final.png\n")
-cat("📐 Axes: X=[-8,12] | Y=[-3.5,2.5]\n")
-cat("🏷️  Labels: TNTN1,TNTN2,TNTN3,TNT1,TNT2,TNT3\n")
 
 
 
