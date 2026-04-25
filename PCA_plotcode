@@ -1,119 +1,71 @@
-# Load libraries
-library(DESeq2)
-library(ggplot2)
-library(tidyverse)
+# ==========================================================
+# FINAL PCA PLOT - LABELS + PERFECT AXES
+# ==========================================================
 
-# ----------------------------------------------------------
-# 1. Set directories
-# ----------------------------------------------------------
-fc_dir <- "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/featurecount_codin"
-output_dir <- "E:/RNA_QC_DS2/ANALYSIS/duplicate analysis/plots_duplicated"
-if(!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+library(ggrepel)  # 👈 Add this if not loaded
 
-# ----------------------------------------------------------
-# 2. Define all samples and groups
-# ----------------------------------------------------------
-samples <- data.frame(
-  files = c(
-    "NH4Cl_Succ1_CDS_featureCounts.txt",
-    "NH4Cl_Succ2_CDS_featureCounts.txt",
-    "NH4Cl_Succ3_CDS_featureCounts.txt",
-    "TNT_NH4Cl1_CDS_featureCounts.txt",
-    "TNT_NH4Cl2_nohuman_CDS_featureCounts.txt",
-    "TNT_NH4Cl3_CDS_featureCounts.txt",
-    "TNT_NH4ClS1_CDS_featureCounts.txt",
-    "TNT_NH4ClS2_CDS_featureCounts.txt",
-    "TNT_NH4ClS3_CDS_featureCounts.txt",
-    "TNT_Succ1_nohuman_CDS_featureCounts.txt",
-    "TNT_Succ2_nohuman_CDS_featureCounts.txt",
-    "TNT_Succ3_nohuman_CDS_featureCounts.txt",
-    "TNT1_CDS_featureCounts.txt",
-    "TNT2_CDS_featureCounts.txt",
-    "TNT3_CDS_featureCounts.txt",
-    "L3NT1_CDS_featureCounts.txt",
-    "L3NT2_CDS_featureCounts.txt",
-    "L3NT3_CDS_featureCounts.txt"
-  ),
-  group = factor(c(
-    rep("CN", 3),
-    rep("TNTCN", 3),
-    rep("TNTC", 3),
-    rep("TNTN", 3),
-    rep("TNT", 3),
-    rep("L3NT", 3)
-  ))
-)
+# 1. VST transform
+vsd <- vst(dds, blind = FALSE)
 
-samples$files <- file.path(fc_dir, samples$files)
+# 2. PCA data
+pcaData <- plotPCA(vsd, intgroup = "group", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
 
-# ----------------------------------------------------------
-# 3. Load FeatureCounts and merge into count matrix
-# ----------------------------------------------------------
-count_list <- lapply(samples$files, function(f) {
-  dat <- read.delim(f, header = FALSE, comment.char = "#")
-  colnames(dat) <- c("Geneid", "Chr", "Start", "End", "Strand", "Length", "Counts")
-  dat <- dat[, c("Geneid", "Counts")]
-  colnames(dat)[2] <- basename(f)
-  return(dat)
-})
+# 🔍 Ranges
+cat("📊 PC1:", round(range(pcaData$PC1), 2), " | PC2:", round(range(pcaData$PC2), 2), "\n")
+cat("📈 Variance: PC1 =", percentVar[1], "% | PC2 =", percentVar[2], "%\n\n")
 
-countData <- Reduce(function(x, y) merge(x, y, by = "Geneid", all = TRUE), count_list)
-rownames(countData) <- countData$Geneid
-countData <- countData[, -1]
-countData[] <- lapply(countData, function(x) as.numeric(as.character(x)))
-countData[is.na(countData)] <- 0
-countData <- countData[rowSums(countData) > 0, ]
-
-# ----------------------------------------------------------
-# 4. Define condition-wise comparisons
-# ----------------------------------------------------------
-comparisons <- list(
-  "TNT_vs_L3NT"    = c("TNT", "L3NT"),
-  "TNTC_vs_L3NT"   = c("TNTC", "L3NT"),
-  "TNTCN_vs_L3NT"  = c("TNTCN", "L3NT"),
-  "TNTN_vs_L3NT"   = c("TNTN", "L3NT"),
-  "L3NT_vs_CN"     = c("L3NT", "CN"),
-  "TNT_vs_CN"      = c("TNT", "CN"),
-  "TNT_vs_TNTC"    = c("TNT", "TNTC"),
-  "TNT_vs_TNTCN"   = c("TNT", "TNTCN")
-)
-
-# ----------------------------------------------------------
-# 5. Loop through comparisons and generate PCA plots
-# ----------------------------------------------------------
-for(comp in names(comparisons)){
+# 3. FINAL PLOT
+pca_plot <- ggplot(pcaData, aes(PC1, PC2, color = group)) +
   
-  groups <- comparisons[[comp]]
+  # 🔹 Grey dotted reference axes at 0
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", size = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dotted", color = "grey50", size = 0.8) +
   
-  # Subset samples
-  sel_samples <- samples[samples$group %in% groups, ]
-  sel_counts <- countData[, basename(sel_samples$files)]
+  # Points
+  geom_point(size = 5, alpha = 0.9, stroke = 0.8) +
   
-  # Prepare DESeq2 object
-  dds <- DESeqDataSetFromMatrix(
-    countData = round(as.matrix(sel_counts)),
-    colData = sel_samples,
-    design = ~ group
+  # Labels
+  geom_text_repel(aes(label = rownames(pcaData)), 
+                  size = 4, fontface = "bold", 
+                  box.padding = 0.3, point.padding = 0.3,
+                  max.overlaps = Inf) +
+  
+  labs(
+    x = paste0("PC1 (", percentVar[1], "%)"),
+    y = paste0("PC2 (", percentVar[2], "%)")
+  ) +
+  
+  coord_fixed(
+    ratio = 1,
+    xlim = c(-4,4),
+    ylim = c(-3,3)
+  ) +
+  
+  scale_color_manual(
+    values = c("TNTCN" = "#D7301F", "3NT" = "#7D26CD"),
+    labels = c("TNT" = "TNTCN", "3NT" = "3NT"),
+    name = NULL
+    
+  ) +
+  
+  # 🔥 BOXED CLEAN THEME (no grid, with border)
+  theme_bw(base_size = 15) +
+  theme(
+    legend.position = "top",
+    panel.grid = element_blank(),        
+    panel.border = element_rect(color = "black", size = 1),  # ✅
+    axis.title = element_text(size = 13, face = "bold")
   )
-  
-  # rlog transform
-  rld <- rlog(dds, blind = TRUE)
-  
-  # PCA data
-  pcaData <- plotPCA(rld, intgroup = "group", returnData = TRUE)
-  percentVar <- round(100 * attr(pcaData, "percentVar"))
-  
-  # PCA plot
-  p <- ggplot(pcaData, aes(x = PC1, y = PC2, color = group)) +
-    geom_point(size = 4) +
-    xlab(paste0("PC1: ", percentVar[1], "% variance")) +
-    ylab(paste0("PC2: ", percentVar[2], "% variance")) +
-    theme_bw() +
-    ggtitle(paste0("PCA: ", comp))
-  
-  # Save plot
-  out_path <- file.path(output_dir, paste0(comp, "_PCA.png"))
-  ggsave(out_path, plot = p, width = 7, height = 6, dpi = 300, limitsize = FALSE)
-  
-  cat("✅ Saved PCA plot for", comp, "at", out_path, "\n")
-}
+# 4. Display & save
+print(pca_plot)
+ggsave(file.path(output_dir, "PCA_TNTCN_vs_3NT_final.png"), 
+       pca_plot, width = 11, height = 8, dpi = 300, bg = "white")
+
+cat("✅ PCA plot saved: PCA_TNT_vs_TNTN_final.png\n")
+cat("📐 Axes: X=[-8,12] | Y=[-3.5,2.5]\n")
+cat("🏷️  Labels: TNTN1,TNTN2,TNTN3,TNT1,TNT2,TNT3\n")
+
+
+
+
